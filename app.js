@@ -4,26 +4,26 @@
   const STORAGE_KEY = 'encouraging-todo:v1';
 
   const ENCOURAGEMENTS = [
-    "that counts, seriously",
-    "small win, still a win",
-    "look at you, done",
-    "one less thing",
-    "nice, that's off your plate",
-    "progress, not perfection",
-    "you showed up for that",
-    "quietly getting it done",
-    "that's a real one",
-    "quiet win, well earned",
-    "quietly kept your word",
-    "quietly moving forward",
-    "you did the thing",
-    "no fuss, just done",
-    "quietly checked off",
-    "that's momentum",
-    "step taken",
-    "good, that's handled",
-    "you followed through",
-    "worth noting, that's done"
+    "🎉 that counts, seriously",
+    "🌱 small win, still a win",
+    "✨ look at you, done",
+    "🧹 one less thing",
+    "😌 nice, that's off your plate",
+    "📈 progress, not perfection",
+    "🙌 you showed up for that",
+    "🤫 quietly getting it done",
+    "💪 that's a real one",
+    "🏆 quiet win, well earned",
+    "🤝 quietly kept your word",
+    "🚶 quietly moving forward",
+    "✅ you did the thing",
+    "🕊️ no fuss, just done",
+    "☑️ quietly checked off",
+    "🔥 that's momentum",
+    "👣 step taken",
+    "👍 good, that's handled",
+    "🌟 you followed through",
+    "📝 worth noting, that's done"
   ];
 
   const TAGLINES = [
@@ -247,7 +247,7 @@
     toastEl.classList.add('show');
     toastTimer = setTimeout(() => {
       toastEl.classList.remove('show');
-    }, 2200);
+    }, 2600);
   }
 
   addForm.addEventListener('submit', e => {
