@@ -314,9 +314,9 @@ body {
   transform: translate(-50%, 12px);
   background: var(--ink);
   color: var(--bg);
-  padding: 12px 20px;
+  padding: 16px 26px;
   border-radius: 999px;
-  font-size: 14px;
+  font-size: 16px;
   max-width: calc(100% - 40px);
   text-align: center;
   opacity: 0;
