@@ -50,6 +50,51 @@
 
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
+  const MAX_SHARED_TASKS = 200;
+  const MAX_SHARED_TASK_LEN = 200;
+
+  function toBase64Url(str) {
+    const bytes = new TextEncoder().encode(str);
+    let bin = '';
+    bytes.forEach(b => { bin += String.fromCharCode(b); });
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function fromBase64Url(b64) {
+    let padded = b64.replace(/-/g, '+').replace(/_/g, '/');
+    while (padded.length % 4) padded += '=';
+    const bin = atob(padded);
+    const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  }
+
+  function buildShareUrl() {
+    const texts = state.tasks.filter(t => !t.done).map(t => t.text);
+    const encoded = toBase64Url(JSON.stringify(texts));
+    const url = new URL(location.href);
+    url.hash = `share=${encoded}`;
+    return url.toString();
+  }
+
+  function parseSharedTasks() {
+    const match = /^#share=(.+)$/.exec(location.hash);
+    if (!match) return null;
+    try {
+      const texts = JSON.parse(fromBase64Url(match[1]));
+      if (!Array.isArray(texts)) return null;
+      return texts
+        .filter(t => typeof t === 'string' && t.trim())
+        .slice(0, MAX_SHARED_TASKS)
+        .map(t => t.trim().slice(0, MAX_SHARED_TASK_LEN));
+    } catch {
+      return null;
+    }
+  }
+
+  function clearShareHash() {
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+
   function loadState() {
     let raw;
     try {
@@ -138,6 +183,11 @@
   const streakLabelEl = document.getElementById('streakLabel');
   const taglineEl = document.getElementById('tagline');
   const toastEl = document.getElementById('toast');
+  const shareBtn = document.getElementById('shareBtn');
+  const importBanner = document.getElementById('importBanner');
+  const importBannerText = document.getElementById('importBannerText');
+  const importAddBtn = document.getElementById('importAddBtn');
+  const importDismissBtn = document.getElementById('importDismissBtn');
 
   let doneExpanded = false;
   let toastTimer = null;
@@ -262,7 +312,54 @@
     render();
   });
 
+  shareBtn.addEventListener('click', async () => {
+    const active = state.tasks.filter(t => !t.done);
+    if (active.length === 0) {
+      showToast('Nothing to share yet');
+      return;
+    }
+    const url = buildShareUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('🔗 link copied');
+    } catch {
+      window.prompt('Copy your shareable link:', url);
+    }
+  });
+
+  let pendingSharedTasks = null;
+
+  function showImportBanner(texts) {
+    pendingSharedTasks = texts;
+    importBannerText.textContent = `Someone shared ${texts.length} ${texts.length === 1 ? 'task' : 'tasks'} with you.`;
+    importBanner.hidden = false;
+  }
+
+  importAddBtn.addEventListener('click', () => {
+    if (pendingSharedTasks) {
+      pendingSharedTasks.forEach(text => {
+        state.tasks.unshift({ id: uid(), text, done: false, doneAt: null });
+      });
+      saveState();
+      render();
+    }
+    pendingSharedTasks = null;
+    importBanner.hidden = true;
+    clearShareHash();
+  });
+
+  importDismissBtn.addEventListener('click', () => {
+    pendingSharedTasks = null;
+    importBanner.hidden = true;
+    clearShareHash();
+  });
+
   taglineEl.textContent = TAGLINES[Math.floor(Math.random() * TAGLINES.length)];
+
+  const sharedTasks = parseSharedTasks();
+  if (sharedTasks && sharedTasks.length > 0) {
+    showImportBanner(sharedTasks);
+  }
 
   render();
 
