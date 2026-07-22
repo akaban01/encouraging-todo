@@ -58,8 +58,31 @@ body {
 /* Topbar */
 
 .topbar {
+  position: relative;
   padding: 28px 4px 20px;
   text-align: center;
+}
+
+.share-btn {
+  position: absolute;
+  top: 24px;
+  right: 4px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.share-btn:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .stats {
@@ -303,6 +326,50 @@ body {
 .done-list .task-item {
   background: var(--done-bg);
   box-shadow: none;
+}
+
+/* Import banner */
+
+.import-banner {
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin: 4px 0 20px;
+}
+
+.import-banner p {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.import-banner-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.import-btn {
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.import-dismiss-btn {
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 14px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.import-banner[hidden] {
+  display: none;
 }
 
 /* Toast */
