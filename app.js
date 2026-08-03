@@ -53,42 +53,102 @@
   const MAX_SHARED_TASKS = 200;
   const MAX_SHARED_TASK_LEN = 200;
 
-  function toBase64Url(str) {
-    const bytes = new TextEncoder().encode(str);
+  function bytesToBase64Url(bytes) {
     let bin = '';
     bytes.forEach(b => { bin += String.fromCharCode(b); });
     return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
-  function fromBase64Url(b64) {
+  function base64UrlToBytes(b64) {
     let padded = b64.replace(/-/g, '+').replace(/_/g, '/');
     while (padded.length % 4) padded += '=';
     const bin = atob(padded);
-    const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
+    return Uint8Array.from(bin, c => c.charCodeAt(0));
   }
 
-  function buildShareUrl() {
-    const texts = state.tasks.filter(t => !t.done).map(t => t.text);
-    const encoded = toBase64Url(JSON.stringify(texts));
+  // encodeURIComponent escapes plenty of characters that are actually legal
+  // as-is inside a fragment (RFC 3986 pchar), so put them back verbatim.
+  const FRAGMENT_SAFE = {
+    '%24': '$', '%26': '&', '%2B': '+', '%2C': ',', '%2F': '/',
+    '%3A': ':', '%3B': ';', '%3D': '=', '%3F': '?', '%40': '@'
+  };
+
+  // Percent-encoding keeps plain ASCII at one character per character, but a
+  // space costs three (%20) and every task separator another three (%0A).
+  // Both are far more common than "_" and "~", so trade the rare pair for the
+  // common pair and pay the three characters only on the rare one.
+  function encodeShareText(str) {
+    return encodeURIComponent(str)
+      .replace(/%(?:24|26|2B|2C|2F|3A|3B|3D|3F|40)/g, m => FRAGMENT_SAFE[m])
+      .replace(/_/g, '%5F')
+      .replace(/~/g, '%7E')
+      .replace(/%20/g, '_')
+      .replace(/%0A/g, '~');
+  }
+
+  function decodeShareText(str) {
+    return decodeURIComponent(str.replace(/~/g, '%0A').replace(/_/g, '%20'));
+  }
+
+  async function deflateToBase64Url(str) {
+    try {
+      const stream = new Blob([new TextEncoder().encode(str)]).stream()
+        .pipeThrough(new CompressionStream('deflate-raw'));
+      const buf = await new Response(stream).arrayBuffer();
+      return bytesToBase64Url(new Uint8Array(buf));
+    } catch {
+      return null; // no CompressionStream here; the plain encoding still works
+    }
+  }
+
+  async function inflateFromBase64Url(b64) {
+    const stream = new Blob([base64UrlToBytes(b64)]).stream()
+      .pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Response(stream).text();
+  }
+
+  async function buildShareUrl() {
+    const text = state.tasks
+      .filter(t => !t.done)
+      .map(t => t.text.replace(/\n/g, ' '))
+      .join('\n');
+
+    let hash = `s=${encodeShareText(text)}`;
+    const deflated = await deflateToBase64Url(text);
+    // Compression wins on long lists and loses on short ones, so just take
+    // whichever came out shorter.
+    if (deflated && deflated.length + 2 < hash.length) hash = `z=${deflated}`;
+
     const url = new URL(location.href);
-    url.hash = `share=${encoded}`;
+    url.hash = hash;
     return url.toString();
   }
 
-  function parseSharedTasks() {
-    const match = /^#share=(.+)$/.exec(location.hash);
-    if (!match) return null;
+  async function parseSharedTasks() {
+    const hash = location.hash;
+    let text = null;
     try {
-      const texts = JSON.parse(fromBase64Url(match[1]));
-      if (!Array.isArray(texts)) return null;
-      return texts
-        .filter(t => typeof t === 'string' && t.trim())
-        .slice(0, MAX_SHARED_TASKS)
-        .map(t => t.trim().slice(0, MAX_SHARED_TASK_LEN));
+      let match;
+      if ((match = /^#s=(.*)$/.exec(hash))) {
+        text = decodeShareText(match[1]);
+      } else if ((match = /^#z=(.+)$/.exec(hash))) {
+        text = await inflateFromBase64Url(match[1]);
+      } else if ((match = /^#share=(.+)$/.exec(hash))) {
+        // Links shared before this encoding existed: base64url-encoded JSON.
+        const texts = JSON.parse(new TextDecoder().decode(base64UrlToBytes(match[1])));
+        if (!Array.isArray(texts)) return null;
+        text = texts.filter(t => typeof t === 'string').join('\n');
+      }
     } catch {
       return null;
     }
+    if (text === null) return null;
+    return text
+      .split('\n')
+      .map(t => t.trim())
+      .filter(Boolean)
+      .slice(0, MAX_SHARED_TASKS)
+      .map(t => t.slice(0, MAX_SHARED_TASK_LEN));
   }
 
   function clearShareHash() {
@@ -318,7 +378,7 @@
       showToast('Nothing to share yet');
       return;
     }
-    const url = buildShareUrl();
+    const url = await buildShareUrl();
     try {
       await navigator.clipboard.writeText(url);
       showToast('🔗 link copied');
@@ -356,10 +416,11 @@
 
   taglineEl.textContent = TAGLINES[Math.floor(Math.random() * TAGLINES.length)];
 
-  const sharedTasks = parseSharedTasks();
-  if (sharedTasks && sharedTasks.length > 0) {
-    showImportBanner(sharedTasks);
-  }
+  parseSharedTasks().then(sharedTasks => {
+    if (sharedTasks && sharedTasks.length > 0) {
+      showImportBanner(sharedTasks);
+    }
+  });
 
   render();
 
