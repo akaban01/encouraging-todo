@@ -1,13 +1,20 @@
 {
+  "id": "./index.html",
   "name": "Encouraging Todo",
   "short_name": "Encouraging",
   "description": "A todo list that feels like a supportive friend, not another nagging task manager.",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#faf7f2",
   "theme_color": "#faf7f2",
+  "categories": [
+    "productivity",
+    "lifestyle"
+  ],
   "icons": [
     {
       "src": "icons/icon.svg",

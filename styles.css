@@ -8,6 +8,8 @@
   --accent-soft: #f0ded0;
   --border: #ece5da;
   --done-bg: #f4f1ea;
+  --snackbar-bg: #34302b;
+  --snackbar-ink: #f7f3ec;
   --shadow: 0 1px 2px rgba(60, 45, 25, 0.04), 0 4px 16px rgba(60, 45, 25, 0.05);
   --radius: 18px;
   color-scheme: light;
@@ -24,6 +26,8 @@
     --accent-soft: #3a2e24;
     --border: #34302b;
     --done-bg: #211f1c;
+    --snackbar-bg: #3d3831;
+    --snackbar-ink: #f2ede4;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 16px rgba(0, 0, 0, 0.25);
     color-scheme: dark;
   }
@@ -44,6 +48,13 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: contain;
+}
+
+/* One visible, consistent focus ring for everything reachable by keyboard. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 .app {
@@ -143,14 +154,16 @@ body {
 
 #taskInput {
   flex: 1;
+  min-width: 0;
   border: 1px solid var(--border);
   background: var(--surface);
   border-radius: var(--radius);
   padding: 14px 18px;
+  font-family: inherit;
   font-size: 16px;
   color: var(--ink);
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 #taskInput::placeholder {
@@ -159,6 +172,7 @@ body {
 
 #taskInput:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .add-btn {
@@ -178,6 +192,15 @@ body {
 
 .add-btn:active {
   transform: scale(0.92);
+}
+
+.add-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.add-btn:disabled:active {
+  transform: none;
 }
 
 /* Task list */
@@ -207,8 +230,10 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Duration is mirrored by LEAVE_MS in app.js. */
 .task-item.leaving {
   animation: leave 0.2s ease forwards;
+  pointer-events: none;
 }
 
 @keyframes leave {
@@ -231,6 +256,10 @@ body {
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
+.check-btn:hover {
+  border-color: var(--accent);
+}
+
 .check-btn svg {
   opacity: 0;
   transform: scale(0.6);
@@ -248,18 +277,41 @@ body {
   transform: scale(1);
 }
 
+/* A button so editing is keyboard-reachable, styled to read as plain text. */
 .task-text {
   flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  margin: 0;
+  padding: 1px 0 0;
+  font-family: inherit;
   font-size: 16px;
   line-height: 1.4;
-  word-break: break-word;
-  padding-top: 1px;
+  color: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: text;
 }
 
 .task-item.done .task-text {
   color: var(--ink-faint);
   text-decoration: line-through;
   text-decoration-color: var(--ink-faint);
+}
+
+.task-edit {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  border-bottom: 1px solid var(--accent);
+  background: none;
+  padding: 0 0 1px;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--ink);
+  outline: none;
 }
 
 .delete-btn {
@@ -299,16 +351,43 @@ body {
   margin-top: 28px;
 }
 
+.done-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .done-toggle {
   display: flex;
   align-items: center;
   gap: 6px;
   border: none;
   background: none;
+  font-family: inherit;
   color: var(--ink-faint);
   font-size: 13px;
   cursor: pointer;
   padding: 8px 2px;
+}
+
+.clear-done-btn {
+  border: none;
+  background: none;
+  font-family: inherit;
+  color: var(--ink-faint);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 8px 2px;
+  transition: color 0.15s ease;
+}
+
+.clear-done-btn:hover {
+  color: var(--accent);
+}
+
+.clear-done-btn[hidden] {
+  display: none;
 }
 
 .chevron {
@@ -352,6 +431,7 @@ body {
   border: none;
   background: var(--accent);
   color: #fff;
+  font-family: inherit;
   font-size: 14px;
   font-weight: 600;
   padding: 8px 14px;
@@ -363,6 +443,7 @@ body {
   border: none;
   background: transparent;
   color: var(--ink-soft);
+  font-family: inherit;
   font-size: 14px;
   padding: 8px 14px;
   cursor: pointer;
@@ -372,9 +453,9 @@ body {
   display: none;
 }
 
-/* Toast */
+/* Cheer — the big centred celebration on completing something */
 
-.toast {
+.cheer {
   position: fixed;
   left: 50%;
   top: 50%;
@@ -386,20 +467,85 @@ body {
   font-size: clamp(22px, 6vw, 30px);
   font-weight: 700;
   line-height: 1.3;
+  /* Anchored at left:50%, so shrink-to-fit would only ever offer it half the
+     viewport. Size to the content and clamp against the full width instead. */
+  width: max-content;
   max-width: calc(100% - 48px);
   text-align: center;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.28);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
   z-index: 10;
 }
 
-.toast.show {
+.cheer.show {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
 }
 
+/* Snackbar — quiet, actionable messages like undo */
+
+.snackbar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  transform: translate(-50%, 12px);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 12px 12px 12px 18px;
+  border-radius: 14px;
+  background: var(--snackbar-bg);
+  color: var(--snackbar-ink);
+  font-size: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  /* visibility keeps the hidden snackbar out of the tab order entirely */
+  visibility: hidden;
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0.2s;
+  z-index: 11;
+}
+
+.snackbar.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s;
+}
+
+.snackbar-action {
+  flex-shrink: 0;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.snackbar-action:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.snackbar-action[hidden] {
+  display: none;
+}
+
 @media (min-width: 480px) {
   .topbar { padding-top: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

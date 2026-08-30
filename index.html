@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#faf7f2">
+<meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1a17" media="(prefers-color-scheme: dark)">
 <title>Encouraging Todo</title>
 <meta name="description" content="A todo list that feels like a supportive friend, not another nagging task manager.">
 <link rel="manifest" href="manifest.json">
@@ -15,8 +16,8 @@
 <div class="app">
 
   <header class="topbar">
-    <button class="share-btn" id="shareBtn" type="button" aria-label="Copy a shareable link to your list">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"></line><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"></line></svg>
+    <button class="share-btn" id="shareBtn" type="button" aria-label="Share your list">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"></line><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"></line></svg>
     </button>
     <div class="stats">
       <div class="stat">
@@ -26,7 +27,7 @@
       <div class="stat-divider" aria-hidden="true"></div>
       <div class="stat">
         <span class="stat-num" id="streakCount">0</span>
-        <span class="stat-label" id="streakLabel">day streak</span>
+        <span class="stat-label">day streak</span>
       </div>
     </div>
     <p class="tagline" id="tagline">one step at a time</p>
@@ -49,9 +50,10 @@
         placeholder="What's on your mind?"
         maxlength="200"
         aria-label="New task"
+        enterkeyhint="done"
       >
-      <button type="submit" class="add-btn" aria-label="Add task">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      <button type="submit" class="add-btn" id="addBtn" aria-label="Add task">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
       </button>
     </form>
 
@@ -61,18 +63,26 @@
 
     <p class="empty-state" id="emptyState">Nothing on the list. That's alright too.</p>
 
-    <section class="done-section" id="doneSection" hidden>
-      <button class="done-toggle" id="doneToggle" aria-expanded="false">
-        <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        <span id="doneToggleLabel">Completed</span>
-      </button>
+    <section class="done-section" id="doneSection" hidden aria-label="Completed tasks">
+      <div class="done-header">
+        <button class="done-toggle" id="doneToggle" type="button" aria-expanded="false" aria-controls="doneList">
+          <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          <span id="doneToggleLabel">Completed</span>
+        </button>
+        <button class="clear-done-btn" id="clearDoneBtn" type="button" hidden>Clear</button>
+      </div>
       <ul class="task-list done-list" id="doneList" hidden></ul>
     </section>
   </main>
 
 </div>
 
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="cheer" id="cheer" role="status" aria-live="polite"></div>
+
+<div class="snackbar" id="snackbar" role="status" aria-live="polite">
+  <span id="snackbarText"></span>
+  <button type="button" class="snackbar-action" id="snackbarAction" hidden></button>
+</div>
 
 <script src="app.js"></script>
 </body>
