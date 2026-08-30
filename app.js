@@ -300,11 +300,13 @@
   const importBannerText = document.getElementById('importBannerText');
   const importAddBtn = document.getElementById('importAddBtn');
   const importDismissBtn = document.getElementById('importDismissBtn');
+  const reorderStatus = document.getElementById('reorderStatus');
 
   let doneExpanded = false;
   let editingId = null;
   const pendingRemoval = new Set();
   let refocusId = null;
+  let refocusSelector = '.task-text';
   let renderedDay = todayStr();
   let cheerTimer = null;
   let snackbarTimer = null;
@@ -357,9 +359,10 @@
       return;
     }
     if (refocusId) {
-      const btn = findTaskEl(refocusId)?.querySelector('.task-text');
+      const el = findTaskEl(refocusId)?.querySelector(refocusSelector);
       refocusId = null;
-      if (btn) btn.focus();
+      refocusSelector = '.task-text';
+      if (el) el.focus();
     }
   }
 
@@ -381,6 +384,10 @@
       (task.done ? ' done' : '') +
       (pendingRemoval.has(task.id) ? ' leaving' : '');
     li.dataset.id = task.id;
+
+    // Completed rows get an inert spacer so their checkboxes stay in line
+    // with the draggable ones above.
+    li.appendChild(task.done ? renderHandleSpacer() : renderDragHandle(task));
 
     const checkBtn = document.createElement('button');
     checkBtn.type = 'button';
@@ -418,6 +425,30 @@
     btn.textContent = task.text;
     btn.setAttribute('aria-label', `Edit: ${shortText(task.text)}`);
     btn.addEventListener('click', () => startEditing(task.id));
+    return btn;
+  }
+
+  function renderHandleSpacer() {
+    const span = document.createElement('span');
+    span.className = 'drag-handle-spacer';
+    span.setAttribute('aria-hidden', 'true');
+    return span;
+  }
+
+  function renderDragHandle(task) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'drag-handle';
+    btn.setAttribute(
+      'aria-label',
+      `Reorder: ${shortText(task.text)}. Press the up and down arrow keys to move it.`
+    );
+    btn.innerHTML = svgIcon(
+      16, 16, 2,
+      '<line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line>'
+    );
+    btn.addEventListener('pointerdown', e => startDrag(e, task, btn));
+    btn.addEventListener('keydown', e => moveByKeyboard(e, task));
     return btn;
   }
 
@@ -642,9 +673,11 @@
   importAddBtn.addEventListener('click', () => {
     const incoming = pendingSharedTasks;
     if (incoming) {
-      incoming.forEach(text => {
-        state.tasks.unshift({ id: uid(), text, done: false, doneAt: null });
-      });
+      // Spread rather than unshifting one at a time: shared order is the
+      // sender's chosen order, and inserting them individually reverses it.
+      state.tasks.unshift(
+        ...incoming.map(text => ({ id: uid(), text, done: false, doneAt: null }))
+      );
       saveState();
       render();
       showSnackbar(`Added ${incoming.length} ${incoming.length === 1 ? 'task' : 'tasks'}`);
@@ -653,6 +686,199 @@
   });
 
   importDismissBtn.addEventListener('click', closeImportBanner);
+
+  // --- Reordering ---
+
+  // Dragging happens from a dedicated handle rather than the whole row: on
+  // touch a vertical drag is also a scroll, and the only reliable way to opt
+  // one thing out of the scroller is touch-action:none on that thing alone.
+  //
+  // The dragged row is taken out of flow (position:fixed) and follows the
+  // pointer, while a placeholder of the same height travels between the
+  // remaining rows to show where it will land. Nothing touches state until
+  // the drop, so an abandoned drag costs nothing.
+  let drag = null;
+  let autoScrollTimer = null;
+  let autoScrollDir = 0;
+
+  const isDragging = () => drag !== null;
+  const activeTasks = () => state.tasks.filter(t => !t.done);
+  const activeOrder = () => activeTasks().map(t => t.id).join('\n');
+
+  // Reordering by id, rather than by array index, leaves completed tasks
+  // exactly where they are — their display order comes from doneAt, not from
+  // their position, and delete-undo still needs those indices to mean
+  // something.
+  function moveTaskBefore(id, targetId) {
+    const from = state.tasks.findIndex(t => t.id === id);
+    if (from === -1) return;
+    const [task] = state.tasks.splice(from, 1);
+
+    let to;
+    if (targetId === null) {
+      // Dropped past the last active task: sit just after it, ahead of any
+      // completed tasks trailing the array.
+      const actives = state.tasks.filter(t => !t.done);
+      const last = actives[actives.length - 1];
+      to = last ? state.tasks.indexOf(last) + 1 : state.tasks.length;
+    } else {
+      to = state.tasks.findIndex(t => t.id === targetId);
+      if (to === -1) to = state.tasks.length;
+    }
+    state.tasks.splice(to, 0, task);
+  }
+
+  function startDrag(e, task, handle) {
+    if (e.button > 0) return;              // right/middle click is not a drag
+    if (isDragging() || editingId || pendingRemoval.size > 0) return;
+
+    const li = handle.closest('.task-item');
+    if (!li) return;
+    const rect = li.getBoundingClientRect();
+
+    const placeholder = document.createElement('li');
+    placeholder.className = 'task-placeholder';
+    placeholder.style.height = `${rect.height}px`;
+
+    drag = {
+      id: task.id,
+      li,
+      placeholder,
+      pointerId: e.pointerId,
+      grabDy: e.clientY - rect.top,
+      lastY: e.clientY,
+      startY: e.clientY,
+      moved: false
+    };
+
+    // Throws if the pointer is no longer active; the drag still works from the
+    // window-level listeners either way.
+    try {
+      handle.setPointerCapture(e.pointerId);
+    } catch {}
+    e.preventDefault();                    // no text selection, no scroll
+
+    li.style.width = `${rect.width}px`;
+    li.style.left = `${rect.left}px`;
+    li.style.top = `${rect.top}px`;
+    li.classList.add('dragging');
+    activeList.insertBefore(placeholder, li);
+    document.body.classList.add('is-dragging');
+  }
+
+  function onDragMove(e) {
+    if (!isDragging() || e.pointerId !== drag.pointerId) return;
+    e.preventDefault();
+    if (!drag.moved && Math.abs(e.clientY - drag.startY) > 3) drag.moved = true;
+    drag.lastY = e.clientY;
+    drag.li.style.top = `${e.clientY - drag.grabDy}px`;
+    positionPlaceholder(e.clientY);
+    updateAutoScroll(e.clientY);
+  }
+
+  function positionPlaceholder(pointerY) {
+    const rows = [...activeList.children].filter(
+      el => el !== drag.li && el !== drag.placeholder
+    );
+    const target = rows.find(row => {
+      const r = row.getBoundingClientRect();
+      return pointerY < r.top + r.height / 2;
+    });
+    if (target) {
+      if (drag.placeholder.nextElementSibling !== target) {
+        activeList.insertBefore(drag.placeholder, target);
+      }
+    } else if (activeList.lastElementChild !== drag.placeholder) {
+      activeList.appendChild(drag.placeholder);
+    }
+  }
+
+  // Whatever real row now follows the placeholder is what we land in front of;
+  // null means the end of the list.
+  function dropTargetId() {
+    let next = drag.placeholder.nextElementSibling;
+    while (next && next === drag.li) next = next.nextElementSibling;
+    return next ? next.dataset.id : null;
+  }
+
+  function updateAutoScroll(pointerY) {
+    const EDGE = 64;
+    autoScrollDir = pointerY < EDGE ? -1 : pointerY > innerHeight - EDGE ? 1 : 0;
+    if (autoScrollDir === 0) {
+      stopAutoScroll();
+      return;
+    }
+    if (autoScrollTimer) return;
+    autoScrollTimer = setInterval(() => {
+      scrollBy(0, autoScrollDir * 12);
+      // The pointer may be holding still while the page moves under it, so
+      // keep the placeholder honest.
+      if (isDragging()) positionPlaceholder(drag.lastY);
+    }, 16);
+  }
+
+  function stopAutoScroll() {
+    clearInterval(autoScrollTimer);
+    autoScrollTimer = null;
+    autoScrollDir = 0;
+  }
+
+  function endDrag(commit) {
+    if (!isDragging()) return;
+    const { id, li, placeholder, moved } = drag;
+    const targetId = commit && moved ? dropTargetId() : null;
+    const shouldMove = commit && moved;
+
+    stopAutoScroll();
+    li.classList.remove('dragging');
+    li.style.width = '';
+    li.style.left = '';
+    li.style.top = '';
+    placeholder.remove();
+    document.body.classList.remove('is-dragging');
+    drag = null;
+
+    // A click that never moved leaves the list untouched, so there is nothing
+    // to save and no reason to rebuild every row.
+    if (!shouldMove) return;
+
+    const before = activeOrder();
+    moveTaskBefore(id, targetId);
+    if (activeOrder() === before) return;
+    saveState();
+    render();
+  }
+
+  addEventListener('pointermove', onDragMove, { passive: false });
+  addEventListener('pointerup', () => endDrag(true));
+  addEventListener('pointercancel', () => endDrag(false));
+  addEventListener('keydown', e => {
+    if (e.key === 'Escape' && isDragging()) endDrag(false);
+  });
+
+  // Dragging is unusable without a mouse or a steady hand, so the handle also
+  // takes arrow keys.
+  function moveByKeyboard(e, task) {
+    const dir = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
+    if (dir === 0) return;
+    e.preventDefault();
+
+    const actives = activeTasks();
+    const from = actives.findIndex(t => t.id === task.id);
+    const to = from + dir;
+    if (from === -1 || to < 0 || to >= actives.length) return;
+
+    // Moving down means landing in front of whatever follows the neighbour.
+    const targetId = dir === -1 ? actives[to].id : (actives[to + 1]?.id ?? null);
+    moveTaskBefore(task.id, targetId);
+    saveState();
+
+    refocusId = task.id;
+    refocusSelector = '.drag-handle';
+    render();
+    reorderStatus.textContent =
+      `${shortText(task.text)}: position ${to + 1} of ${actives.length}`;
+  }
 
   // --- Install ---
 
@@ -758,6 +984,7 @@
   // "Done today" and the streak both go stale if the app sits open past
   // midnight, so re-render when the date actually turns over.
   function checkDayRollover() {
+    if (isDragging()) return; // a re-render would tear the dragged row away
     if (todayStr() !== renderedDay) render();
   }
   setInterval(checkDayRollover, 60000);
