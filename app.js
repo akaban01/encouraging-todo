@@ -293,6 +293,9 @@
   const snackbarTextEl = document.getElementById('snackbarText');
   const snackbarActionBtn = document.getElementById('snackbarAction');
   const shareBtn = document.getElementById('shareBtn');
+  const installBtn = document.getElementById('installBtn');
+  const iosInstall = document.getElementById('iosInstall');
+  const iosInstallDismiss = document.getElementById('iosInstallDismiss');
   const importBanner = document.getElementById('importBanner');
   const importBannerText = document.getElementById('importBannerText');
   const importAddBtn = document.getElementById('importAddBtn');
@@ -650,6 +653,107 @@
   });
 
   importDismissBtn.addEventListener('click', closeImportBanner);
+
+  // --- Install ---
+
+  // Two entirely different worlds: Chromium browsers hand us a prompt event we
+  // can fire from a click, while iOS Safari has no install API at all and can
+  // only be walked through Add to Home Screen by hand.
+  let installPrompt = null;
+  let installMode = null; // 'prompt' | 'ios'
+
+  const isStandalone = () =>
+    matchMedia('(display-mode: standalone)').matches ||
+    matchMedia('(display-mode: minimal-ui)').matches ||
+    navigator.standalone === true;
+
+  // iPadOS 13+ reports itself as a Mac, so touch points are the giveaway.
+  const isIOS = () =>
+    /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  // Only Safari can add to the Home Screen; the other iOS browsers cannot,
+  // so showing them these instructions would just be wrong.
+  const isIOSSafari = () =>
+    isIOS() && !/crios|fxios|edgios|opios|mercury/i.test(navigator.userAgent);
+
+  function offerInstall(mode) {
+    if (isStandalone()) return; // already installed — nothing to offer
+    installMode = mode;
+    installBtn.hidden = false;
+    // Only the iOS button is a disclosure control; the Chromium one opens a
+    // browser dialog, so disclosure semantics would misdescribe it.
+    if (mode === 'ios') {
+      installBtn.setAttribute('aria-controls', 'iosInstall');
+      installBtn.setAttribute('aria-expanded', 'false');
+    } else {
+      installBtn.removeAttribute('aria-controls');
+      installBtn.removeAttribute('aria-expanded');
+    }
+  }
+
+  function withdrawInstall() {
+    installMode = null;
+    installPrompt = null;
+    installBtn.hidden = true;
+    closeIosInstall();
+  }
+
+  function closeIosInstall() {
+    iosInstall.hidden = true;
+    if (installBtn.hasAttribute('aria-expanded')) {
+      installBtn.setAttribute('aria-expanded', 'false');
+    }
+  }
+
+  function onInstallAvailable(e) {
+    installPrompt = e;
+    offerInstall('prompt');
+  }
+
+  addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    onInstallAvailable(e);
+  });
+
+  // The inline snippet in index.html may have caught it before this ran.
+  if (window.__installPrompt) onInstallAvailable(window.__installPrompt);
+
+  addEventListener('appinstalled', () => {
+    window.__installPrompt = null;
+    withdrawInstall();
+    showCheer('🏠 installed — find it on your home screen');
+  });
+
+  installBtn.addEventListener('click', async () => {
+    if (installMode === 'ios') {
+      const opening = iosInstall.hidden;
+      iosInstall.hidden = !opening;
+      installBtn.setAttribute('aria-expanded', String(opening));
+      return;
+    }
+    if (!installPrompt) return;
+
+    // The event is single-use. Spend it and take the button away; if the user
+    // declines, the browser offers a fresh one later and the button returns.
+    const prompt = installPrompt;
+    installPrompt = null;
+    window.__installPrompt = null;
+    installBtn.hidden = true;
+    try {
+      await prompt.prompt();
+      await prompt.userChoice;
+    } catch {
+      // Already consumed, or the browser refused to show it. Nothing to add.
+    }
+  });
+
+  iosInstallDismiss.addEventListener('click', () => {
+    closeIosInstall();
+    installBtn.focus();
+  });
+
+  if (isIOSSafari()) offerInstall('ios');
 
   // "Done today" and the streak both go stale if the app sits open past
   // midnight, so re-render when the date actually turns over.
