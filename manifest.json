@@ -38,5 +38,21 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "screenshots": [
+    {
+      "src": "icons/screenshot-narrow.png",
+      "sizes": "540x900",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Your list, with today's count and streak"
+    },
+    {
+      "src": "icons/screenshot-wide.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Your list, with today's count and streak"
+    }
   ]
 }

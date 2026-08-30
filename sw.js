@@ -1,4 +1,4 @@
-const CACHE_NAME = 'encouraging-todo-v3';
+const CACHE_NAME = 'encouraging-todo-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -8,7 +8,8 @@ const ASSETS = [
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/icon-512-maskable.png'
+  './icons/icon-512-maskable.png',
+  './icons/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', event => {
