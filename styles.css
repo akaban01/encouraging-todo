@@ -50,6 +50,19 @@ body {
   overscroll-behavior-y: contain;
 }
 
+/* Announced to screen readers, invisible to everyone else. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* One visible, consistent focus ring for everything reachable by keyboard. */
 :focus-visible {
   outline: 2px solid var(--accent);
@@ -307,6 +320,63 @@ body {
 
 @keyframes leave {
   to { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+
+/* Reordering */
+
+.drag-handle,
+.drag-handle-spacer {
+  flex-shrink: 0;
+  width: 22px;
+  height: 26px;
+  margin-top: 1px;
+}
+
+.drag-handle {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--ink-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  /* Opts this one element out of the scroller so a vertical drag here is a
+     drag, not a page scroll. */
+  touch-action: none;
+  transition: color 0.15s ease;
+}
+
+.drag-handle:hover {
+  color: var(--accent);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Lifted out of flow so it tracks the pointer without disturbing the list. */
+.task-item.dragging {
+  position: fixed;
+  z-index: 20;
+  margin: 0;
+  animation: none;
+  cursor: grabbing;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+}
+
+.task-placeholder {
+  list-style: none;
+  box-sizing: border-box;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+}
+
+body.is-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing;
 }
 
 .check-btn {
