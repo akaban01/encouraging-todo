@@ -1,4 +1,4 @@
-const CACHE_NAME = 'encouraging-todo-v2';
+const CACHE_NAME = 'encouraging-todo-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -27,18 +27,28 @@ self.addEventListener('activate', event => {
   );
 });
 
+// Network-first: a stale app shell is what breaks this app, not a slow one.
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
+  const request = event.request;
+  if (request.method !== 'GET') return;
+  if (new URL(request.url).origin !== self.location.origin) return;
 
   event.respondWith(
-    fetch(event.request)
+    fetch(request)
       .then(response => {
-        if (response && response.status === 200) {
+        if (response && response.status === 200 && response.type === 'basic') {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+          caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
         }
         return response;
       })
-      .catch(() => caches.match(event.request).then(cached => cached || caches.match('./index.html')))
+      .catch(() => caches.match(request).then(cached => {
+        if (cached) return cached;
+        // Only a page request should ever be answered with the app shell;
+        // handing index.html back for a missing script or icon is worse
+        // than letting the request fail.
+        if (request.mode === 'navigate') return caches.match('./index.html');
+        return Response.error();
+      }))
   );
 });
