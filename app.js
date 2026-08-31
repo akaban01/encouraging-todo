@@ -1,6 +1,11 @@
 (() => {
   'use strict';
 
+  // Bump this on every release. sw.js carries the same value and derives its
+  // cache name from it, so a bump also retires the previous cache — the two
+  // are checked against each other in the tests.
+  const APP_VERSION = '1.0.0';
+
   const STORAGE_KEY = 'encouraging-todo:v1';
 
   const MAX_TASK_LEN = 200;   // the visible label
@@ -384,6 +389,7 @@
   const doneTodayCountEl = document.getElementById('doneTodayCount');
   const streakCountEl = document.getElementById('streakCount');
   const taglineEl = document.getElementById('tagline');
+  const appVersionEl = document.getElementById('appVersion');
   const cheerEl = document.getElementById('cheer');
   const snackbarEl = document.getElementById('snackbar');
   const snackbarTextEl = document.getElementById('snackbarText');
@@ -1145,6 +1151,10 @@
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) checkDayRollover();
   });
+
+  // Worth showing: a service worker can serve a page from cache long after a
+  // release, and this is how you tell which build you are actually looking at.
+  appVersionEl.textContent = `v${APP_VERSION}`;
 
   taglineEl.textContent = pick(TAGLINES);
 
