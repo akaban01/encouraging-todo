@@ -125,103 +125,6 @@ body {
   color: var(--accent);
 }
 
-/* Share panel */
-
-.share-panel {
-  background: var(--accent-soft);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  margin: 4px 0 20px;
-}
-
-.share-panel[hidden] {
-  display: none;
-}
-
-.share-panel-title {
-  margin: 0 0 12px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.share-field-label {
-  display: block;
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  color: var(--ink-soft);
-  margin-bottom: 6px;
-}
-
-#shareLabelInput {
-  width: 100%;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: 12px;
-  padding: 10px 12px;
-  font-family: inherit;
-  font-size: 15px;
-  color: var(--ink);
-  outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-#shareLabelInput::placeholder {
-  color: var(--ink-faint);
-}
-
-#shareLabelInput:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(201, 123, 74, 0.18);
-}
-
-.share-hint {
-  margin: 8px 0 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--ink-soft);
-}
-
-.share-panel-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.share-copy-btn,
-.share-native-btn {
-  border: none;
-  background: var(--accent);
-  color: #fff;
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  padding: 8px 14px;
-  border-radius: 12px;
-  cursor: pointer;
-}
-
-.share-native-btn {
-  background: transparent;
-  color: var(--accent);
-  box-shadow: inset 0 0 0 1px currentColor;
-}
-
-.share-native-btn[hidden] {
-  display: none;
-}
-
-.share-cancel-btn {
-  border: none;
-  background: transparent;
-  color: var(--ink-soft);
-  font-family: inherit;
-  font-size: 14px;
-  padding: 8px 14px;
-  cursor: pointer;
-}
-
 /* Add to Home Screen walkthrough — iOS Safari has no install API */
 
 .ios-install {
@@ -528,6 +431,55 @@ body.is-dragging {
   text-align: left;
   overflow-wrap: anywhere;
   cursor: text;
+}
+
+/* A task that carries a link: the label opens it, the host says where. */
+.task-link {
+  display: inline;
+  text-decoration: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.task-link-label {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset: 2px;
+}
+
+.task-link:hover .task-link-label {
+  text-decoration-color: var(--accent);
+}
+
+.task-link-host {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.task-item.done .task-link,
+.task-item.done .task-link-label {
+  color: var(--ink-faint);
+  text-decoration-color: var(--ink-faint);
+}
+
+.edit-btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+}
+
+.edit-btn:hover {
+  color: var(--accent);
 }
 
 .task-item.done .task-text {
