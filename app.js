@@ -5,7 +5,6 @@
 
   const MAX_TASK_LEN = 200;
   const MAX_SHARED_TASKS = 200;
-  const MAX_LABEL_LEN = 80;
   // Completion history is only ever read for "today", so keep a generous
   // window and let anything older fall off instead of growing forever.
   const DONE_HISTORY_DAYS = 400;
@@ -208,9 +207,7 @@
       ),
       streak: typeof raw.streak === 'number' ? raw.streak : 0,
       lastStreakDate: typeof raw.lastStreakDate === 'string' ? raw.lastStreakDate : null,
-      phraseBag: Array.isArray(raw.phraseBag) ? raw.phraseBag : [],
-      // Empty means "use the page title"; anything else is the user's wording.
-      shareLabel: typeof raw.shareLabel === 'string' ? raw.shareLabel.slice(0, MAX_LABEL_LEN) : ''
+      phraseBag: Array.isArray(raw.phraseBag) ? raw.phraseBag : []
     };
   }
 
@@ -296,12 +293,6 @@
   const snackbarTextEl = document.getElementById('snackbarText');
   const snackbarActionBtn = document.getElementById('snackbarAction');
   const shareBtn = document.getElementById('shareBtn');
-  const sharePanel = document.getElementById('sharePanel');
-  const shareLabelInput = document.getElementById('shareLabelInput');
-  const shareHint = document.getElementById('shareHint');
-  const shareCopyBtn = document.getElementById('shareCopyBtn');
-  const shareNativeBtn = document.getElementById('shareNativeBtn');
-  const shareCancelBtn = document.getElementById('shareCancelBtn');
   const installBtn = document.getElementById('installBtn');
   const iosInstall = document.getElementById('iosInstall');
   const iosInstallDismiss = document.getElementById('iosInstallDismiss');
@@ -638,116 +629,29 @@
 
   clearDoneBtn.addEventListener('click', clearCompleted);
 
-  // The share URL carries the whole list in its fragment, so it is long and
-  // ugly to paste. Copying it as a real hyperlink lets it show readable text
-  // instead, while plain-text targets still receive the address itself.
-
-  const pageTitle = () => document.title || 'My list';
-  const shareLabel = () => state.shareLabel.trim() || pageTitle();
-
-  const escapeHtml = str =>
-    str.replace(/&/g, '&amp;')
-       .replace(/</g, '&lt;')
-       .replace(/>/g, '&gt;')
-       .replace(/"/g, '&quot;');
-
-  // Two flavours on the clipboard at once: rich targets (mail, chat, docs)
-  // take the anchor and show the label, plain targets take the raw URL.
-  async function copyShareLink(url, label) {
-    const html = `<a href="${escapeHtml(url)}">${escapeHtml(label)}</a>`;
-    if (navigator.clipboard && typeof ClipboardItem === 'function') {
-      try {
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            'text/html': new Blob([html], { type: 'text/html' }),
-            'text/plain': new Blob([url], { type: 'text/plain' })
-          })
-        ]);
-        return 'rich';
-      } catch {
-        // No rich clipboard here — the plain URL is still worth having.
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      return 'plain';
-    } catch {
-      window.prompt('Copy your shareable link:', url);
-      return 'prompt';
-    }
-  }
-
-  function openSharePanel() {
-    shareLabelInput.placeholder = pageTitle();
-    shareLabelInput.value = state.shareLabel;
-    shareHint.textContent =
-      `Leave it empty to use the page title. Pasted into a chat or document, ` +
-      `the link reads as this text instead of the long address.`;
-    shareNativeBtn.hidden = !(navigator.share && matchMedia('(pointer: coarse)').matches);
-    sharePanel.hidden = false;
-    shareBtn.setAttribute('aria-expanded', 'true');
-    shareLabelInput.focus();
-    shareLabelInput.select();
-  }
-
-  function closeSharePanel() {
-    sharePanel.hidden = true;
-    shareBtn.setAttribute('aria-expanded', 'false');
-    shareBtn.focus();
-  }
-
-  // Only remember a label the user actually went through with.
-  function commitLabel() {
-    const next = shareLabelInput.value.trim().slice(0, MAX_LABEL_LEN);
-    if (next !== state.shareLabel) {
-      state.shareLabel = next;
-      saveState();
-    }
-  }
-
-  shareBtn.addEventListener('click', () => {
+  shareBtn.addEventListener('click', async () => {
     if (!state.tasks.some(t => !t.done)) {
       showSnackbar('Nothing to share yet');
       return;
     }
-    if (sharePanel.hidden) openSharePanel();
-    else closeSharePanel();
-  });
-
-  shareCopyBtn.addEventListener('click', async () => {
-    commitLabel();
-    const label = shareLabel();
     const url = await buildShareUrl();
-    const how = await copyShareLink(url, label);
-    closeSharePanel();
-    if (how === 'rich') showSnackbar(`🔗 Copied as “${label}”`);
-    else if (how === 'plain') showSnackbar('🔗 Link copied');
-  });
 
-  shareNativeBtn.addEventListener('click', async () => {
-    commitLabel();
-    const label = shareLabel();
-    const url = await buildShareUrl();
-    try {
-      await navigator.share({ title: label, url });
-      closeSharePanel();
-    } catch (err) {
-      if (err && err.name === 'AbortError') return; // they backed out; stay put
-      const how = await copyShareLink(url, label);
-      closeSharePanel();
-      if (how !== 'prompt') showSnackbar('🔗 Link copied');
+    // On a phone the share sheet is the natural gesture; on a desktop a
+    // silent clipboard copy beats a system dialog.
+    if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+      try {
+        await navigator.share({ title: 'Encouraging Todo', url });
+        return;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+      }
     }
-  });
 
-  shareCancelBtn.addEventListener('click', closeSharePanel);
-
-  shareLabelInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      shareCopyBtn.click();
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      closeSharePanel();
+    try {
+      await navigator.clipboard.writeText(url);
+      showSnackbar('🔗 Link copied');
+    } catch {
+      window.prompt('Copy your shareable link:', url);
     }
   });
 
