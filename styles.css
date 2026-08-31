@@ -433,6 +433,55 @@ body.is-dragging {
   cursor: text;
 }
 
+/* A task that carries a link: the label opens it, the host says where. */
+.task-link {
+  display: inline;
+  text-decoration: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.task-link-label {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset: 2px;
+}
+
+.task-link:hover .task-link-label {
+  text-decoration-color: var(--accent);
+}
+
+.task-link-host {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.task-item.done .task-link,
+.task-item.done .task-link-label {
+  color: var(--ink-faint);
+  text-decoration-color: var(--ink-faint);
+}
+
+.edit-btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+}
+
+.edit-btn:hover {
+  color: var(--accent);
+}
+
 .task-item.done .task-text {
   color: var(--ink-faint);
   text-decoration: line-through;

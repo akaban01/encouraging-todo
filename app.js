@@ -3,7 +3,9 @@
 
   const STORAGE_KEY = 'encouraging-todo:v1';
 
-  const MAX_TASK_LEN = 200;
+  const MAX_TASK_LEN = 200;   // the visible label
+  const MAX_URL_LEN = 2000;   // the link behind it, which can be far longer
+  const MAX_LINE_LEN = MAX_TASK_LEN + MAX_URL_LEN + 1;
   const MAX_SHARED_TASKS = 200;
   // Completion history is only ever read for "today", so keep a generous
   // window and let anything older fall off instead of growing forever.
@@ -126,7 +128,7 @@
   async function buildShareUrl() {
     const text = state.tasks
       .filter(t => !t.done)
-      .map(t => t.text.replace(/\n/g, ' '))
+      .map(t => rawForm(t).replace(/\n/g, ' '))
       .join('\n');
 
     let hash = `s=${encodeShareText(text)}`;
@@ -166,12 +168,93 @@
       .map(t => t.trim())
       .filter(Boolean)
       .slice(0, MAX_SHARED_TASKS)
-      .map(t => t.slice(0, MAX_TASK_LEN));
+      .map(t => t.slice(0, MAX_LINE_LEN));
   }
 
   function clearShareHash() {
     history.replaceState(null, '', location.pathname + location.search);
   }
+
+  // --- Links ---
+
+  // A pasted product link is unreadable in a list, so a task keeps the link
+  // separately and shows a short label instead. Anything typed before or
+  // after the link becomes that label; with nothing else to go on, one is
+  // derived from the link itself.
+  const URL_IN_TEXT = /\bhttps?:\/\/[^\s<>"']+/i;
+
+  const decodeSegment = seg => {
+    try {
+      return decodeURIComponent(seg);
+    } catch {
+      return seg;
+    }
+  };
+
+  // Closest thing to the page's title without fetching it: most link paths
+  // carry a human-readable slug, so prefer a wordy segment over an opaque id.
+  function labelFromUrl(parsed) {
+    const segments = parsed.pathname
+      .split('/')
+      .filter(Boolean)
+      .map(decodeSegment)
+      .filter(s => !s.includes('='));   // tracking fragments that leaked into the path
+
+    // The most word-like segment is nearly always the readable slug; product
+    // ids and reference codes carry few real words, so they lose.
+    const wordCount = s => s.split(/[-_+]+/).filter(w => /^[a-z]{2,}$/i.test(w)).length;
+    const best = segments
+      .map(s => ({ s, n: wordCount(s) }))
+      .filter(x => x.n > 0)
+      .sort((a, b) => b.n - a.n || b.s.length - a.s.length)[0];
+
+    if (!best) return parsed.hostname.replace(/^www\./, '');
+    return best.s
+      .replace(/\.[a-z0-9]{1,5}$/i, '')   // drop a file extension
+      .replace(/[-_+]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, MAX_TASK_LEN);
+  }
+
+  // Splits typed text into the label to show and the link to open. Only http
+  // and https are honoured — javascript: and data: are not links you would
+  // want a list item to fire.
+  function splitLink(raw) {
+    const plain = { text: raw.trim().slice(0, MAX_TASK_LEN), url: null };
+    const match = URL_IN_TEXT.exec(raw);
+    if (!match) return plain;
+
+    // Trailing punctuation usually belongs to the sentence, not the link.
+    const candidate = match[0].replace(/[.,;:!?)\]}>'"]+$/, '');
+    let parsed;
+    try {
+      parsed = new URL(candidate);
+    } catch {
+      return plain;
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return plain;
+    if (parsed.href.length > MAX_URL_LEN) return plain;
+
+    const rest = (raw.slice(0, match.index) + ' ' + raw.slice(match.index + candidate.length))
+      .replace(/\s+/g, ' ')
+      .trim();
+    return {
+      text: (rest || labelFromUrl(parsed)).slice(0, MAX_TASK_LEN),
+      url: parsed.href
+    };
+  }
+
+  const linkHost = url => {
+    try {
+      return new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+      return '';
+    }
+  };
+
+  // What the user typed, and what goes into a share link or the edit field.
+  const rawForm = task => (task.url ? `${task.text} ${task.url}` : task.text);
 
   // Anything older than the retention window is dead weight in localStorage.
   function pruneDoneDates(doneDates) {
@@ -194,12 +277,25 @@
     }
     const tasks = (Array.isArray(raw.tasks) ? raw.tasks : [])
       .filter(t => t && typeof t.text === 'string')
-      .map(t => ({
-        id: typeof t.id === 'string' && t.id ? t.id : uid(),
-        text: t.text.slice(0, MAX_TASK_LEN),
-        done: !!t.done,
-        doneAt: typeof t.doneAt === 'string' ? t.doneAt : null
-      }));
+      .map(t => {
+        // Tasks stored before links existed keep their URL inline; split it
+        // out so they start showing a label too.
+        const split =
+          typeof t.url === 'string' && t.url
+            ? { text: t.text.slice(0, MAX_TASK_LEN), url: t.url }
+            : splitLink(t.text);
+        const url =
+          typeof split.url === 'string' && /^https?:\/\//i.test(split.url)
+            ? split.url.slice(0, MAX_URL_LEN)
+            : null;
+        return {
+          id: typeof t.id === 'string' && t.id ? t.id : uid(),
+          text: split.text,
+          url,
+          done: !!t.done,
+          doneAt: typeof t.doneAt === 'string' ? t.doneAt : null
+        };
+      });
     return {
       tasks,
       doneDates: pruneDoneDates(
@@ -400,7 +496,14 @@
     checkBtn.addEventListener('click', () => toggleTask(task.id));
     li.appendChild(checkBtn);
 
-    li.appendChild(task.id === editingId ? renderEditor(task) : renderTaskText(task));
+    if (task.id === editingId) {
+      li.appendChild(renderEditor(task));
+    } else if (task.url) {
+      li.appendChild(renderTaskLink(task));
+      li.appendChild(renderEditBtn(task));
+    } else {
+      li.appendChild(renderTaskText(task));
+    }
 
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
@@ -424,6 +527,53 @@
     btn.className = 'task-text';
     btn.textContent = task.text;
     btn.setAttribute('aria-label', `Edit: ${shortText(task.text)}`);
+    btn.addEventListener('click', () => startEditing(task.id));
+    return btn;
+  }
+
+  // The label is the link, so tapping the row's text opens it — which is the
+  // point of putting a link on a shopping-list item.
+  function renderTaskLink(task) {
+    const wrap = document.createElement('a');
+    wrap.className = 'task-text task-link';
+    wrap.href = task.url;
+    wrap.target = '_blank';
+    // Without this an opened tab can reach back through window.opener.
+    wrap.rel = 'noopener noreferrer';
+    wrap.title = task.url;
+
+    const label = document.createElement('span');
+    label.className = 'task-link-label';
+    label.textContent = task.text;
+    wrap.appendChild(label);
+
+    // Showing the destination means nobody has to tap to find out where a
+    // link goes.
+    const host = linkHost(task.url);
+    if (host) {
+      const hostEl = document.createElement('span');
+      hostEl.className = 'task-link-host';
+      hostEl.textContent = host;
+      wrap.appendChild(hostEl);
+    }
+    wrap.setAttribute(
+      'aria-label',
+      `${shortText(task.text)} — opens ${host || 'a link'} in a new tab`
+    );
+    return wrap;
+  }
+
+  // Linked rows need their own edit affordance, since their text now opens
+  // the link instead of starting an edit.
+  function renderEditBtn(task) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'edit-btn';
+    btn.setAttribute('aria-label', `Edit: ${shortText(task.text)}`);
+    btn.innerHTML = svgIcon(
+      16, 16, 2,
+      '<path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>'
+    );
     btn.addEventListener('click', () => startEditing(task.id));
     return btn;
   }
@@ -456,8 +606,8 @@
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'task-edit';
-    input.value = task.text;
-    input.maxLength = MAX_TASK_LEN;
+    input.value = rawForm(task);
+    input.maxLength = MAX_LINE_LEN;
     input.setAttribute('aria-label', 'Edit task');
 
     // Committing re-renders and tears this input out of the DOM, which fires
@@ -468,9 +618,10 @@
       settled = true;
       editingId = null;
       refocusId = task.id;
-      const next = keepEdit ? input.value.trim().slice(0, MAX_TASK_LEN) : '';
-      if (next && next !== task.text) {
-        task.text = next;
+      const next = keepEdit ? splitLink(input.value) : null;
+      if (next && next.text && (next.text !== task.text || next.url !== task.url)) {
+        task.text = next.text;
+        task.url = next.url;
         saveState();
       }
       render();
@@ -494,10 +645,10 @@
     render();
   }
 
-  function addTask(text) {
-    const trimmed = text.trim().slice(0, MAX_TASK_LEN);
-    if (!trimmed) return;
-    state.tasks.unshift({ id: uid(), text: trimmed, done: false, doneAt: null });
+  function addTask(raw) {
+    const { text, url } = splitLink(raw);
+    if (!text) return;
+    state.tasks.unshift({ id: uid(), text, url, done: false, doneAt: null });
     saveState();
     render();
   }
@@ -676,7 +827,10 @@
       // Spread rather than unshifting one at a time: shared order is the
       // sender's chosen order, and inserting them individually reverses it.
       state.tasks.unshift(
-        ...incoming.map(text => ({ id: uid(), text, done: false, doneAt: null }))
+        ...incoming.map(line => {
+          const { text, url } = splitLink(line);
+          return { id: uid(), text, url, done: false, doneAt: null };
+        })
       );
       saveState();
       render();
