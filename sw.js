@@ -1,4 +1,6 @@
-const CACHE_NAME = 'encouraging-todo-v4';
+// Keep in step with APP_VERSION in app.js; the tests fail if these drift.
+const APP_VERSION = '1.0.0';
+const CACHE_NAME = `encouraging-todo-v${APP_VERSION}`;
 const ASSETS = [
   './',
   './index.html',

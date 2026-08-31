@@ -641,6 +641,22 @@ body.is-dragging {
   display: none;
 }
 
+/* Version stamp */
+
+.app-footer {
+  margin-top: auto;
+  padding-top: 28px;
+  text-align: center;
+}
+
+.app-version {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Cheer — the big centred celebration on completing something */
 
 .cheer {
